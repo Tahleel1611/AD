@@ -1,0 +1,156 @@
+================================================================================
+ALZHEIMER'S DISEASE EEG CLASSIFICATION - TRAINING RESULTS
+================================================================================
+
+Timestamp: 2025-10-01 16:16:56
+
+================================================================================
+DATASET INFORMATION
+================================================================================
+Total sequences: 183
+AD sequences: 160 (87.4%)
+HC sequences: 23 (12.6%)
+Imbalance ratio: 6.96:1
+Sequence shape: (183, 2, 266)
+Feature dimension: 266 (PSD: 95, PLI: 171)
+
+================================================================================
+MODEL CONFIGURATION
+================================================================================
+Sequence Length: 2
+CNN Filters: 64
+LSTM Hidden Units: 128
+LSTM Layers: 2
+Dropout: 0.5
+Batch Size: 16
+Learning Rate: 0.001
+Max Epochs: 50
+K-Folds: 5
+
+================================================================================
+FOLD-BY-FOLD RESULTS
+================================================================================
+
+--------------------------------------------------------------------------------
+FOLD 1/5
+--------------------------------------------------------------------------------
+Accuracy:  0.8649 (86.49%)
+Precision: 0.8857 (88.57%)
+Recall:    0.9688 (96.88%)
+F1-Score:  0.9254 (92.54%)
+AUC:       0.8688 (86.88%)
+
+Confusion Matrix:
+                Predicted
+                HC    AD
+Actual  HC       1     4
+        AD       1    31
+
+Sensitivity (AD Detection): 0.9688 (96.88%)
+Specificity (HC Detection): 0.2000 (20.00%)
+
+--------------------------------------------------------------------------------
+FOLD 2/5
+--------------------------------------------------------------------------------
+Accuracy:  0.9459 (94.59%)
+Precision: 0.9688 (96.88%)
+Recall:    0.9688 (96.88%)
+F1-Score:  0.9688 (96.88%)
+AUC:       0.9219 (92.19%)
+
+Confusion Matrix:
+                Predicted
+                HC    AD
+Actual  HC       4     1
+        AD       1    31
+
+Sensitivity (AD Detection): 0.9688 (96.88%)
+Specificity (HC Detection): 0.8000 (80.00%)
+
+--------------------------------------------------------------------------------
+FOLD 3/5
+--------------------------------------------------------------------------------
+Accuracy:  0.9459 (94.59%)
+Precision: 0.9412 (94.12%)
+Recall:    1.0000 (100.00%)
+F1-Score:  0.9697 (96.97%)
+AUC:       0.7875 (78.75%)
+
+Confusion Matrix:
+                Predicted
+                HC    AD
+Actual  HC       3     2
+        AD       0    32
+
+Sensitivity (AD Detection): 1.0000 (100.00%)
+Specificity (HC Detection): 0.6000 (60.00%)
+
+--------------------------------------------------------------------------------
+FOLD 4/5
+--------------------------------------------------------------------------------
+Accuracy:  0.9167 (91.67%)
+Precision: 0.9143 (91.43%)
+Recall:    1.0000 (100.00%)
+F1-Score:  0.9552 (95.52%)
+AUC:       0.8359 (83.59%)
+
+Confusion Matrix:
+                Predicted
+                HC    AD
+Actual  HC       1     3
+        AD       0    32
+
+Sensitivity (AD Detection): 1.0000 (100.00%)
+Specificity (HC Detection): 0.2500 (25.00%)
+
+--------------------------------------------------------------------------------
+FOLD 5/5
+--------------------------------------------------------------------------------
+Accuracy:  0.9444 (94.44%)
+Precision: 0.9688 (96.88%)
+Recall:    0.9688 (96.88%)
+F1-Score:  0.9688 (96.88%)
+AUC:       0.9844 (98.44%)
+
+Confusion Matrix:
+                Predicted
+                HC    AD
+Actual  HC       3     1
+        AD       1    31
+
+Sensitivity (AD Detection): 0.9688 (96.88%)
+Specificity (HC Detection): 0.7500 (75.00%)
+
+================================================================================
+CROSS-VALIDATION SUMMARY
+================================================================================
+
+Average Accuracy:  0.9236 +/- 0.0314 (92.36% +/- 3.14%)
+Average Precision: 0.9357 +/- 0.0322 (93.57% +/- 3.22%)
+Average Recall:    0.9812 +/- 0.0153 (98.12% +/- 1.53%)
+Average F1-Score:  0.9576 +/- 0.0170 (95.76% +/- 1.70%)
+Average AUC:       0.8797 +/- 0.0682 (87.97% +/- 6.82%)
+
+================================================================================
+KEY ACHIEVEMENTS
+================================================================================
+[+] Handled severe class imbalance using:
+    - SMOTE oversampling on training data
+    - Weighted Cross-Entropy loss
+    - Stratified K-Fold cross-validation
+[+] Extracted 266 features per epoch:
+    - 95 PSD features (5 bands x 19 channels)
+    - 171 PLI connectivity features (19 channels)
+[+] Implemented Hybrid CNN-LSTM architecture
+[+] Subject-level validation (no data leakage)
+
+================================================================================
+CLINICAL SIGNIFICANCE
+================================================================================
+Average Sensitivity (AD Detection): 0.9812 (98.12%)
+High recall/sensitivity is critical for early Alzheimer's detection
+to minimize false negatives and ensure patients receive timely care.
+
+================================================================================
+END OF REPORT
+================================================================================

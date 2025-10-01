@@ -1,0 +1,31 @@
+================================================================================
+ALZHEIMER'S DISEASE EEG CLASSIFICATION - TRAINING RESULTS
+================================================================================
+
+Timestamp: 2025-10-01 19:54:51
+
+Dataset Information:
+Total sequences: 549
+AD sequences: 480 (87.4%)
+HC sequences: 69 (12.6%)
+Feature shape: (549, 2, 266)
+
+Cross-Validation Results:
+
+Fold 1:
+  Accuracy: 0.9564
+  Precision: 0.9597
+  Recall: 0.9917
+  F1-Score: 0.9754
+  AUC: 0.9679
+
+Fold 2:
+  Accuracy: 0.9599
+  Precision: 0.9712
+  Recall: 0.9833
+  F1-Score: 0.9772
+  AUC: 0.9848
+
+Overall Performance:
+Average F1-Score: 0.9763
+Average Recall: 0.9875
