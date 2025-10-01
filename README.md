@@ -16,7 +16,7 @@ This system successfully processes 19-channel EEG data to distinguish between Al
 - **98.73% Average AUC** demonstrating robust classification
 
 ## 📊 Dataset Information
-
+- **Dataset link**:https://osf.io/2v5md/
 - **Total Subjects Processed**: 183 successfully (160 AD + 23 Healthy)
 - **Feature Sequences Generated**: 549 (480 AD + 69 Healthy)
 - **Recording Conditions**: Eyes closed and eyes open
@@ -232,3 +232,4 @@ For questions or issues:
 
 **Last Updated**: October 2025  
 **Version**: 2.0 (Fixed & Optimized)
+
