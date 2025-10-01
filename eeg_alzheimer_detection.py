@@ -25,6 +25,7 @@ from sklearn.preprocessing import StandardScaler
 from imblearn.over_sampling import SMOTE
 
 import matplotlib.pyplot as plt
+import shap
 
 # Set random seeds for reproducibility
 torch.manual_seed(42)
@@ -91,6 +92,11 @@ class Config:
     NUM_EPOCHS = 50
     K_FOLDS = 5
     PATIENCE = 10  # Early stopping patience
+    
+    # SHAP explainability parameters
+    SHAP_BACKGROUND_SIZE = 100  # Number of background samples for SHAP
+    SHAP_TEST_SIZE = 20  # Number of test samples to explain
+    ENABLE_SHAP = True  # Enable SHAP analysis
 
 config = Config()
 
@@ -603,6 +609,322 @@ def evaluate(model, test_loader):
 
     return np.array(all_labels), np.array(all_preds), np.array(all_probs)
 
+def explain_predictions_with_shap(model, X_background, X_test, y_test, feature_names, config):
+    """
+    Generate SHAP explanations for model predictions
+    """
+    print(f"\n{'='*60}")
+    print("SHAP EXPLAINABILITY ANALYSIS")
+    print(f"{'='*60}")
+    
+    try:
+        # Convert to PyTorch tensors
+        X_background_tensor = torch.FloatTensor(X_background).to(device)
+        X_test_tensor = torch.FloatTensor(X_test).to(device)
+        
+        # Create a wrapper function for SHAP that handles model output properly
+        def model_wrapper(x):
+            model.eval()
+            with torch.no_grad():
+                outputs = model(x)
+                # Return softmax probabilities for the AD class (index 1)
+                probs = torch.softmax(outputs, dim=1)
+                return probs[:, 1].cpu().numpy()
+        
+        # Create SHAP explainer with GradientExplainer (more stable than DeepExplainer)
+        print("Creating SHAP explainer...")
+        explainer = shap.GradientExplainer(model, X_background_tensor)
+        
+        # Calculate SHAP values
+        print("Calculating SHAP values...")
+        shap_values = explainer.shap_values(X_test_tensor)
+        
+        # Convert to numpy if needed
+        if isinstance(shap_values, torch.Tensor):
+            shap_values_np = shap_values.cpu().numpy()
+        else:
+            shap_values_np = shap_values
+            
+        X_test_np = X_test_tensor.cpu().numpy()
+        
+        # Reshape for feature-level analysis
+        # From (n_samples, seq_length, features) to (n_samples, total_features)
+        shap_flat = shap_values_np.reshape(shap_values_np.shape[0], -1)
+        X_test_flat = X_test_np.reshape(X_test_np.shape[0], -1)
+        
+        # Create feature names for flattened features
+        flat_feature_names = []
+        for seq in range(config.SEQUENCE_LENGTH):
+            for feat in feature_names:
+                flat_feature_names.append(f"T{seq+1}_{feat}")
+        
+        # Ensure we don't exceed the actual number of features
+        max_features = min(len(flat_feature_names), shap_flat.shape[1])
+        flat_feature_names = flat_feature_names[:max_features]
+        
+        # Generate SHAP visualizations
+        print("Generating SHAP visualizations...")
+        
+        # 1. Summary plot (bar plot instead of dot plot for stability)
+        plt.figure(figsize=(12, 8))
+        
+        # Calculate mean absolute SHAP values for feature importance
+        mean_shap_values = np.mean(np.abs(shap_flat), axis=0)
+        top_features_idx = np.argsort(mean_shap_values)[-20:][::-1]  # Top 20 features
+        
+        top_feature_names = [flat_feature_names[i] for i in top_features_idx]
+        top_feature_values = mean_shap_values[top_features_idx]
+        
+        bars = plt.barh(range(len(top_feature_names)), top_feature_values, color='steelblue', alpha=0.7)
+        plt.yticks(range(len(top_feature_names)), top_feature_names)
+        plt.xlabel('Mean |SHAP Value|', fontweight='bold')
+        plt.title('Top 20 Most Important Features for AD Classification', fontsize=14, fontweight='bold')
+        plt.grid(axis='x', alpha=0.3)
+        
+        # Add value labels
+        for bar, value in zip(bars, top_feature_values):
+            plt.text(value + 0.001, bar.get_y() + bar.get_height()/2,
+                    f'{value:.3f}', ha='left', va='center', fontweight='bold')
+        
+        plt.tight_layout()
+        summary_path = os.path.join(config.OUTPUT_DIR, 'shap_feature_importance.png')
+        plt.savefig(summary_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Saved SHAP feature importance: {summary_path}")
+        
+        # 2. Feature importance by category
+        analyze_feature_importance_by_category(shap_flat, feature_names, config)
+        
+        # 3. Individual prediction explanations
+        generate_individual_explanations(shap_flat, X_test_flat, y_test, 
+                                       flat_feature_names, config)
+        
+        # 4. Channel importance heatmap
+        generate_channel_importance_heatmap(shap_flat, config)
+        
+        return shap_values_np
+        
+    except Exception as e:
+        print(f"Error in SHAP analysis: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def analyze_feature_importance_by_category(shap_values, feature_names, config):
+    """
+    Analyze SHAP importance by feature categories (PSD bands, PLI connectivity)
+    """
+    try:
+        # Calculate mean absolute SHAP values for each feature
+        mean_shap = np.mean(np.abs(shap_values), axis=0)
+        
+        # Group features by category
+        n_psd_features = config.N_PSD_FEATURES * config.SEQUENCE_LENGTH
+        
+        psd_importance = mean_shap[:n_psd_features]
+        pli_importance = mean_shap[n_psd_features:]
+        
+        # Analyze PSD by frequency bands
+        band_importance = {}
+        for i, band in enumerate(config.FREQ_BANDS.keys()):
+            band_indices = []
+            for seq in range(config.SEQUENCE_LENGTH):
+                for ch in range(config.N_CHANNELS):
+                    idx = seq * config.N_PSD_FEATURES + ch * len(config.FREQ_BANDS) + i
+                    if idx < len(psd_importance):
+                        band_indices.append(idx)
+            
+            if band_indices:
+                band_importance[band] = np.mean(psd_importance[band_indices])
+        
+        # Create frequency band importance plot
+        plt.figure(figsize=(10, 6))
+        bands = list(band_importance.keys())
+        importances = list(band_importance.values())
+        
+        bars = plt.bar(bands, importances, color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
+        plt.title('SHAP Importance by EEG Frequency Bands', fontsize=14, fontweight='bold')
+        plt.xlabel('Frequency Bands', fontweight='bold')
+        plt.ylabel('Mean |SHAP Value|', fontweight='bold')
+        plt.grid(axis='y', alpha=0.3)
+        
+        # Add value labels on bars
+        for bar, importance in zip(bars, importances):
+            plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.001,
+                    f'{importance:.3f}', ha='center', va='bottom', fontweight='bold')
+        
+        plt.tight_layout()
+        band_path = os.path.join(config.OUTPUT_DIR, 'shap_frequency_bands.png')
+        plt.savefig(band_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Saved frequency band importance: {band_path}")
+        
+        # Feature category comparison
+        plt.figure(figsize=(8, 6))
+        categories = ['PSD Features', 'PLI Connectivity']
+        cat_importance = [np.mean(psd_importance), np.mean(pli_importance)]
+        
+        bars = plt.bar(categories, cat_importance, color=['#2ca02c', '#ff7f0e'])
+        plt.title('SHAP Importance: PSD vs Connectivity Features', fontsize=14, fontweight='bold')
+        plt.ylabel('Mean |SHAP Value|', fontweight='bold')
+        plt.grid(axis='y', alpha=0.3)
+        
+        for bar, importance in zip(bars, cat_importance):
+            plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.001,
+                    f'{importance:.3f}', ha='center', va='bottom', fontweight='bold')
+        
+        plt.tight_layout()
+        cat_path = os.path.join(config.OUTPUT_DIR, 'shap_feature_categories.png')
+        plt.savefig(cat_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Saved feature category comparison: {cat_path}")
+        
+        # Print analysis results
+        print(f"\nFeature Importance Analysis:")
+        print(f"  PSD Features: {np.mean(psd_importance):.4f}")
+        print(f"  PLI Connectivity: {np.mean(pli_importance):.4f}")
+        print(f"\nFrequency Band Importance:")
+        for band, importance in band_importance.items():
+            print(f"  {band.capitalize()}: {importance:.4f}")
+            
+    except Exception as e:
+        print(f"Error in feature category analysis: {e}")
+
+def generate_individual_explanations(shap_values, X_test, y_test, feature_names, config):
+    """
+    Generate individual prediction explanations for sample patients
+    """
+    try:
+        # Select a few representative samples
+        ad_indices = np.where(y_test == 1)[0]
+        hc_indices = np.where(y_test == 0)[0]
+        
+        selected_indices = []
+        if len(ad_indices) > 0:
+            selected_indices.extend(ad_indices[:2])  # 2 AD samples
+        if len(hc_indices) > 0:
+            selected_indices.extend(hc_indices[:2])  # 2 HC samples
+            
+        if not selected_indices:
+            return
+            
+        # Generate waterfall plots for selected samples
+        for i, idx in enumerate(selected_indices):
+            try:
+                # Get top 15 most important features for this sample
+                sample_shap = shap_values[idx]
+                feature_importance = np.abs(sample_shap)
+                top_indices = np.argsort(feature_importance)[-15:][::-1]
+                
+                plt.figure(figsize=(10, 8))
+                
+                # Create waterfall-style plot
+                top_shap = sample_shap[top_indices]
+                top_features = [feature_names[j] if j < len(feature_names) else f"Feature_{j}" 
+                               for j in top_indices]
+                
+                # Sort by SHAP value for better visualization
+                sorted_indices = np.argsort(top_shap)
+                sorted_shap = top_shap[sorted_indices]
+                sorted_features = [top_features[j] for j in sorted_indices]
+                
+                colors = ['red' if x < 0 else 'blue' for x in sorted_shap]
+                bars = plt.barh(range(len(sorted_shap)), sorted_shap, color=colors, alpha=0.7)
+                
+                plt.yticks(range(len(sorted_features)), sorted_features)
+                plt.xlabel('SHAP Value (Impact on AD Prediction)', fontweight='bold')
+                
+                true_label = "AD Patient" if y_test[idx] == 1 else "Healthy Control"
+                plt.title(f'Individual Explanation - {true_label} (Sample {idx})', 
+                         fontsize=14, fontweight='bold')
+                
+                # Add value labels
+                for bar, value in zip(bars, sorted_shap):
+                    plt.text(value + (0.01 if value >= 0 else -0.01), bar.get_y() + bar.get_height()/2,
+                            f'{value:.3f}', ha='left' if value >= 0 else 'right', 
+                            va='center', fontweight='bold')
+                
+                plt.axvline(x=0, color='black', linestyle='-', alpha=0.8)
+                plt.grid(axis='x', alpha=0.3)
+                plt.tight_layout()
+                
+                ind_path = os.path.join(config.OUTPUT_DIR, f'shap_individual_{i}_{true_label.replace(" ", "_").lower()}.png')
+                plt.savefig(ind_path, dpi=300, bbox_inches='tight')
+                plt.close()
+                print(f"Saved individual explanation: {ind_path}")
+                
+            except Exception as e:
+                print(f"Error generating individual explanation {i}: {e}")
+                continue
+                
+    except Exception as e:
+        print(f"Error in individual explanations: {e}")
+
+def generate_channel_importance_heatmap(shap_values, config):
+    """
+    Generate EEG channel importance heatmap
+    """
+    try:
+        # Calculate mean importance for each channel across PSD features
+        channel_importance = np.zeros(config.N_CHANNELS)
+        
+        for ch in range(config.N_CHANNELS):
+            ch_indices = []
+            for seq in range(config.SEQUENCE_LENGTH):
+                for band in range(len(config.FREQ_BANDS)):
+                    idx = seq * config.N_PSD_FEATURES + ch * len(config.FREQ_BANDS) + band
+                    if idx < shap_values.shape[1]:
+                        ch_indices.append(idx)
+            
+            if ch_indices:
+                channel_importance[ch] = np.mean(np.abs(shap_values[:, ch_indices]))
+        
+        # Create 2D layout for EEG channels (approximate 10-20 positions)
+        channel_positions = {
+            'Fp1': (1, 0), 'Fp2': (1, 4),
+            'F7': (2, 0), 'F3': (2, 1), 'Fz': (2, 2), 'F4': (2, 3), 'F8': (2, 4),
+            'T3': (3, 0), 'C3': (3, 1), 'Cz': (3, 2), 'C4': (3, 3), 'T4': (3, 4),
+            'T5': (4, 0), 'P3': (4, 1), 'Pz': (4, 2), 'P4': (4, 3), 'T6': (4, 4),
+            'O1': (5, 1), 'O2': (5, 3)
+        }
+        
+        # Create heatmap matrix
+        heatmap_data = np.zeros((6, 5))
+        
+        for i, ch_name in enumerate(config.CHANNELS_19):
+            if ch_name in channel_positions:
+                row, col = channel_positions[ch_name]
+                heatmap_data[row, col] = channel_importance[i]
+        
+        # Plot heatmap
+        plt.figure(figsize=(10, 8))
+        im = plt.imshow(heatmap_data, cmap='viridis', aspect='auto')
+        
+        # Add channel labels
+        for ch_name, (row, col) in channel_positions.items():
+            if ch_name in config.CHANNELS_19:
+                ch_idx = config.CHANNELS_19.index(ch_name)
+                plt.text(col, row, f'{ch_name}\n{channel_importance[ch_idx]:.3f}', 
+                        ha='center', va='center', color='white', fontweight='bold')
+        
+        plt.colorbar(im, label='Mean |SHAP Value|')
+        plt.title('EEG Channel Importance for AD Classification', fontsize=14, fontweight='bold')
+        plt.xlabel('Lateral Position', fontweight='bold')
+        plt.ylabel('Anterior-Posterior Position', fontweight='bold')
+        
+        # Remove ticks
+        plt.xticks([])
+        plt.yticks([])
+        
+        plt.tight_layout()
+        heatmap_path = os.path.join(config.OUTPUT_DIR, 'shap_channel_heatmap.png')
+        plt.savefig(heatmap_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Saved channel importance heatmap: {heatmap_path}")
+        
+    except Exception as e:
+        print(f"Error generating channel heatmap: {e}")
+
 def train_with_cross_validation(X, y, subjects, config):
     """Train model with stratified K-fold cross-validation"""
 
@@ -721,6 +1043,32 @@ def train_with_cross_validation(X, y, subjects, config):
 
         # Final evaluation
         y_true, y_pred, y_prob = evaluate(model, test_loader)
+
+        # SHAP analysis for the first fold only (to avoid redundancy)
+        if fold == 0 and config.ENABLE_SHAP:
+            try:
+                # Prepare data for SHAP
+                X_background = X_train_scaled[:config.SHAP_BACKGROUND_SIZE]
+                X_test_shap = X_test_scaled[:config.SHAP_TEST_SIZE]
+                y_test_shap = y_test_fold[:config.SHAP_TEST_SIZE]
+                
+                # Create feature names
+                feature_names = []
+                for ch_name in config.CHANNELS_19:
+                    for band_name in config.FREQ_BANDS.keys():
+                        feature_names.append(f"{ch_name}_{band_name}")
+                
+                # Add PLI feature names
+                for i in range(config.N_CHANNELS):
+                    for j in range(i+1, config.N_CHANNELS):
+                        ch1, ch2 = config.CHANNELS_19[i], config.CHANNELS_19[j]
+                        feature_names.append(f"PLI_{ch1}_{ch2}")
+                
+                # Generate SHAP explanations
+                explain_predictions_with_shap(model, X_background, X_test_shap, 
+                                            y_test_shap, feature_names, config)
+            except Exception as e:
+                print(f"SHAP analysis failed: {e}")
 
         # Compute metrics
         accuracy = accuracy_score(y_true, y_pred)
