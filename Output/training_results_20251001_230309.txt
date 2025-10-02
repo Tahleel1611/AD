@@ -2,7 +2,7 @@
 ALZHEIMER'S DISEASE EEG CLASSIFICATION - TRAINING RESULTS
 ================================================================================
 
-Timestamp: 2025-10-01 19:21:02
+Timestamp: 2025-10-01 23:03:09
 
 Dataset Information:
 Total sequences: 549
