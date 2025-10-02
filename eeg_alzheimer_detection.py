@@ -1218,7 +1218,8 @@ def plot_confusion_matrices_across_folds(fold_results, config):
     cm_path = os.path.join(config.OUTPUT_DIR, 'confusion_matrices.png')
     plt.savefig(cm_path, dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
     print(f"Saved confusion matrices plot: {cm_path}")
-    plt.close()  # Close to prevent display issues
+    plt.show()  # Display the plot
+    plt.close()  # Close after showing to prevent memory issues
 
 def save_results_log(results, X, y, config):
     """Save detailed results to a log file"""
