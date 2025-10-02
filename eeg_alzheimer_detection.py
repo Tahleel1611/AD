@@ -1157,7 +1157,7 @@ def plot_confusion_matrices_across_folds(fold_results, config):
     print(f"\nGenerating confusion matrices across folds...")
     
     n_folds = len(fold_results)
-    fig, axes = plt.subplots(1, n_folds, figsize=(4*n_folds, 4))
+    fig, axes = plt.subplots(1, n_folds, figsize=(4*n_folds, 5))
     
     if n_folds == 1:
         axes = [axes]
@@ -1165,48 +1165,60 @@ def plot_confusion_matrices_across_folds(fold_results, config):
     # Color map for confusion matrices
     cmap = plt.cm.Blues
     
+    # Find global max for consistent colorbar scale
+    global_max = max([result['confusion_matrix'].max() for result in fold_results])
+    
     for i, result in enumerate(fold_results):
         ax = axes[i]
         cm = result['confusion_matrix']
         
-        # Create heatmap
-        im = ax.imshow(cm, interpolation='nearest', cmap=cmap, vmin=0, vmax=cm.max())
+        # Create heatmap with consistent scale
+        im = ax.imshow(cm, interpolation='nearest', cmap=cmap, vmin=0, vmax=global_max)
         
         # Add text annotations
-        thresh = cm.max() / 2.
+        thresh = global_max / 2.
         for row in range(cm.shape[0]):
             for col in range(cm.shape[1]):
                 ax.text(col, row, format(cm[row, col], 'd'),
                        ha="center", va="center",
                        color="white" if cm[row, col] > thresh else "black",
-                       fontsize=14, fontweight='bold')
+                       fontsize=16, fontweight='bold')
         
         # Labels and title
-        ax.set_xlabel('Predicted Label', fontweight='bold')
-        ax.set_ylabel('True Label', fontweight='bold')
+        ax.set_xlabel('Predicted Label', fontweight='bold', fontsize=12)
+        if i == 0:  # Only add y-label to the first subplot
+            ax.set_ylabel('True Label', fontweight='bold', fontsize=12)
         ax.set_title(f'Fold {i+1}', fontweight='bold', fontsize=14)
         
         # Set tick labels
         ax.set_xticks([0, 1])
         ax.set_yticks([0, 1])
-        ax.set_xticklabels(['HC', 'AD'])
-        ax.set_yticklabels(['HC', 'AD'])
+        ax.set_xticklabels(['HC', 'AD'], fontsize=11)
+        ax.set_yticklabels(['HC', 'AD'], fontsize=11)
         
-        # Add grid
+        # Clean appearance
         ax.set_xlim(-0.5, 1.5)
         ax.set_ylim(-0.5, 1.5)
+        
+        # Remove spines for cleaner look
+        for spine in ax.spines.values():
+            spine.set_visible(False)
     
-    # Add colorbar
-    fig.colorbar(im, ax=axes, shrink=0.8, label='Count')
+    # Add a single colorbar on the right
+    cbar = fig.colorbar(im, ax=axes, shrink=0.6, aspect=20, pad=0.02)
+    cbar.set_label('Count', fontweight='bold', fontsize=12)
+    cbar.ax.tick_params(labelsize=10)
     
-    # Overall title
-    fig.suptitle('Confusion Matrices Across Folds', fontsize=16, fontweight='bold')
+    # Overall title with more space
+    fig.suptitle('Confusion Matrices Across Folds', fontsize=18, fontweight='bold', y=0.95)
     
-    plt.tight_layout()
+    # Adjust layout to prevent overlapping
+    plt.subplots_adjust(top=0.85, bottom=0.15, left=0.1, right=0.9, wspace=0.3)
+    
     cm_path = os.path.join(config.OUTPUT_DIR, 'confusion_matrices.png')
-    plt.savefig(cm_path, dpi=300, bbox_inches='tight')
+    plt.savefig(cm_path, dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
     print(f"Saved confusion matrices plot: {cm_path}")
-    plt.show()
+    plt.close()  # Close to prevent display issues
 
 def save_results_log(results, X, y, config):
     """Save detailed results to a log file"""
@@ -1244,11 +1256,7 @@ def save_results_log(results, X, y, config):
     return log_path
 
 def main():
-    """Main execution function"""
-    print("="*60)
-    print("HYBRID CNN-LSTM FOR ALZHEIMER'S DISEASE DETECTION")
-    print("="*60)
-
+    
     # Check if data directory exists
     if not os.path.exists(config.RAW_DATA_DIR):
         print(f"\nError: Data directory not found: {config.RAW_DATA_DIR}")
