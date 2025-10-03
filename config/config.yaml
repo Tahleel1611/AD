@@ -1,0 +1,57 @@
+# EEG Alzheimer's Detection - Configuration File
+# Project: AI-Enhanced EEG for Early Alzheimer's Detection
+# Version: 1.0.0
+
+# Data Configuration
+data:
+  raw_data_path: "data/ds004504"
+  processed_data_path: "data/processed"
+  sampling_rate: 128
+  channels: 19
+
+# Model Configuration
+model:
+  name: "HybridCNNLSTM"
+  input_features: 266
+  hidden_size: 128
+  num_layers: 2
+  dropout: 0.3
+  bidirectional: true
+
+# Training Configuration
+training:
+  batch_size: 32
+  learning_rate: 0.001
+  epochs: 50
+  patience: 10
+  validation_split: 0.2
+
+# Feature Engineering
+features:
+  psd_features: 95
+  pli_features: 171
+  frequency_bands:
+    delta: [0.5, 4]
+    theta: [4, 8]
+    alpha: [8, 13]
+    beta: [13, 30]
+    gamma: [30, 45]
+
+# Output Configuration
+output:
+  model_path: "models/"
+  results_path: "results/"
+  logs_path: "logs/"
+
+# Preprocessing
+preprocessing:
+  lowpass: 45.0
+  highpass: 0.5
+  notch: 50.0
+  reference: "average"
+
+# Cross-validation
+cross_validation:
+  folds: 5
+  stratified: true
+  random_state: 42
