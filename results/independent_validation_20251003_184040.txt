@@ -1,0 +1,19 @@
+Independent Validation Results - Holdout Dataset
+============================================================
+Timestamp: 2025-10-03 18:40:40
+
+Dataset Information:
+  Total samples: 54
+  AD samples: 48
+  Control samples: 6
+
+Performance Metrics:
+  Accuracy: 0.5926
+  Precision: 0.9643
+  Recall: 0.5625
+  F1-Score: 0.7105
+  AUC: 0.9132
+
+Confusion Matrix:
+[[ 5  1]
+ [21 27]]
